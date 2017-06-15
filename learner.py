@@ -12,35 +12,44 @@ from engine.three import PoorMansGymEnv
 
 ENV_NAME='three'
 
-env = PoorMansGymEnv(stop_on_invalid_move = True)
+env = PoorMansGymEnv()
 np.random.seed(123)
 env.seed(123)
 nb_actions = env.action_space.n
 
-window = 8
+window = 16
 
 model = Sequential()
 model.add(Flatten(input_shape=(window,16)))
 model.add(Dense(16, init='random_uniform', activation='relu'))
+model.add(Dropout(0.2))
 model.add(Dense(16, init='random_uniform', activation='relu'))
+model.add(Dropout(0.2))
 model.add(Dense(16, init='random_uniform', activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(16, init='random_uniform', activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(16, init='random_uniform', activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(16, init='random_uniform', activation='relu'))
+model.add(Dropout(0.2))
 model.add(Dense(nb_actions, init='random_uniform', activation='sigmoid'))
 print(model.summary())
 
 
 # Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
 # even the metrics!
-memory = SequentialMemory(limit=50000, window_length=window)
+memory = SequentialMemory(limit=2000, window_length=window)
 args = {
     'model':               model,
     'nb_actions':          nb_actions,
     'memory':              memory,
-    'nb_steps_warmup':     100,
-    'batch_size':          512,
-    # 'batch_size':          32,
-    'target_model_update': 1e-2,
-    'policy':              BoltzmannQPolicy(),
+    # 'batch_size':          512,
+    'batch_size':          128,
+    'target_model_update': 1e-3,
+    # 'policy':              BoltzmannQPolicy(),
 }
+args['nb_steps_warmup'] = max(1024, args['batch_size'])
 
 dqn = DQNAgent(**args)
 dqn.compile(Adam(lr=1e-3), metrics=['mae'])
