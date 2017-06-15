@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 class PoorMansGymEnv(object):
     class ActionSpace(object):
         def __init__(self):
-            # self.actions = [Keys.LEFT, Keys.RIGHT, Keys.DOWN, Keys.UP]
+            self.directions = [Keys.LEFT, Keys.RIGHT, Keys.DOWN, Keys.UP]
             self.actions = [Keys.LEFT, Keys.RIGHT, Keys.DOWN]#, Keys.UP]
             self.n = len(self.actions)
 
@@ -42,12 +42,54 @@ class PoorMansGymEnv(object):
         self.ax.set_xlabel('games')
         self.ax.set_ylabel('score')
         self.ax.legend(loc='best', ncol=2)
+        self.lasttile = 1
         plt.show(block=False)
 
+    def simulate(self, direction):
+        key = self.action_space.directions[direction]
+        tmpgrid = np.array(self.lastgrid).reshape(-1, 4)
+        x = {
+                Keys.LEFT:  lambda i,j: ((i,j), (i,j+1), (i,j+2)),
+                Keys.RIGHT: lambda i,j: ((i,3-j), (i,3-(j+1)), (i,3-(j+2))),
+                Keys.UP:    lambda j,i: ((i,j), (i+1,j), (i+2,j)),
+                Keys.DOWN:  lambda j,i: ((3-i,j), (3-(i+1),j), (3-(i+2),j)),
+        }
+
+
+        def canjoin(grid, a, b):
+            return tmpgrid[a] < 3 and tmpgrid[b] < 3 and tmpgrid[a] != tmpgrid[b] or tmpgrid[a] > 2 and tmpgrid[a] == self.lastscore[b]
+
+        for i in range(4):
+            for j in range(3):
+                a, b, c = x[key](i,j)
+                if tmpgrid[a] == 0:
+                    if max(c) < 4 and min(c) >= 0 and tmpgrid[b] > 0 and canjoin(tmpgrid, b, c):
+                        tmpgrid[a] = tmpgrid[b] + tmpgrid[c]
+                        tmpgrid[b] = 0
+                        tmpgrid[c] = 0
+                    else:
+                        tmpgrid[a] = tmpgrid[b]
+                        tmpgrid[b] = 0
+                elif canjoin(tmpgrid, a, b):
+                    tmpgrid[a] = tmpgrid[a] + tmpgrid[b]
+                    tmpgrid[b] = 0
+
+
+        self.lasttile = (self.lasttile + 1) % 3
+        # TODO: fill random element
+        return tmpgrid
+
+
+
+
+
     def grid(self):
+        # without this the grid may be messed up
+        time.sleep(0.2)
+
         tmp = np.array(self.driver.execute_script("return game.grid;"))
-        tmp = np.log(tmp + 1)
-        tmp = tmp / np.max(tmp)
+        # tmp = np.log(tmp + 1)
+        # tmp = tmp / np.max(tmp)
 
         self.new = not np.array_equal(tmp, self.lastgrid)
 
@@ -76,6 +118,7 @@ class PoorMansGymEnv(object):
         self.lastgrid = 16 * [0]
         self.lastscore = 0
         self.nr_of_invalid_moves = 0
+        self.grid()
 
         # replace_function = """
         # ThreesGame.prototype.plantFood = function(t) {
