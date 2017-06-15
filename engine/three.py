@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import division
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.keys import Keys
@@ -17,7 +18,8 @@ class PoorMansGymEnv(object):
 
         def sample():
             return random.choice(self.actions)
-    def __init__(self):
+    def __init__(self, stop_on_invalid_move=False):
+        self.stop_on_invalid_move = stop_on_invalid_move
         self.scores = []
         self.i = 0
         self.lastscore = 0
@@ -38,9 +40,12 @@ class PoorMansGymEnv(object):
 
     def grid(self):
         tmp = np.array(self.driver.execute_script("return game.grid;"))
-        self.new = (tmp == self.lastgrid).all()
-        # self.lastgrid = tmp
-        self.lastgrid = np.log(tmp+1)/9
+        tmp = np.ma.log(tmp).filled(0)
+        tmp = tmp / np.max(tmp)
+
+        self.new = not np.array_equal(tmp, self.lastgrid)
+
+        self.lastgrid = tmp
 
     def replot(self):
         self.i += 1
@@ -56,37 +61,36 @@ class PoorMansGymEnv(object):
         self.lastgrid = 16*[0]
         self.lastscore = 0
 
-        replace_function = """
-        ThreesGame.prototype.plantFood = function(t) {
-            var e = void 0
-              , o = void 0
-              , n = void 0
-              , i = void 0
-              , r = [];
-            t[0] ? (e = t[0] > 0 ? this.gridSize - 1 : 0,
-            n = e,
-            o = 0,
-            i = this.gridSize - 1) : (o = t[1] > 0 ? this.gridSize - 1 : 0,
-            i = o,
-            e = 0,
-            n = this.gridSize - 1);
-            for (var s = e; s <= n; s++)
-                for (var a = o; a <= i; a++) {
-                    var u = [s, a];
-                    this.getGrid(u) || r.push(u)
-                }
-            var c = r[Math.floor(0 * r.length)];
-            this.setGrid(c, this.food),
-            this.animations.push({
-                type: "new",
-                num: this.food,
-                where: c
-            }),
-            this.food = 1 == this.food ? 2 : 1;
-        }
-        """
-        self.driver.execute_script(replace_function)
-
+        # replace_function = """
+        # ThreesGame.prototype.plantFood = function(t) {
+            # var e = void 0
+              # , o = void 0
+              # , n = void 0
+              # , i = void 0
+              # , r = [];
+            # t[0] ? (e = t[0] > 0 ? this.gridSize - 1 : 0,
+            # n = e,
+            # o = 0,
+            # i = this.gridSize - 1) : (o = t[1] > 0 ? this.gridSize - 1 : 0,
+            # i = o,
+            # e = 0,
+            # n = this.gridSize - 1);
+            # for (var s = e; s <= n; s++)
+                # for (var a = o; a <= i; a++) {
+                    # var u = [s, a];
+                    # this.getGrid(u) || r.push(u)
+                # }
+            # var c = r[Math.floor(0 * r.length)];
+            # this.setGrid(c, this.food),
+            # this.animations.push({
+                # type: "new",
+                # num: this.food,
+                # where: c
+            # }),
+            # this.food = 1 == this.food ? 2 : 1;
+        # }
+        # """
+        # self.driver.execute_script(replace_function)
         return np.array(self.lastgrid)
 
     def done(self):
@@ -112,33 +116,13 @@ class PoorMansGymEnv(object):
         self.grid()
         done = self.done()
         reward = self.score()
-        # time.sleep(0.2)
-        return (self.lastgrid, reward, done, {})
+        if not self.new:
+            print('move not allowed')
+            reward = -5
+        return (self.lastgrid, reward, done or (self.stop_on_invalid_move and not self.new), {})
 
     def render(self):
         pass
 
     def __del__(self):
         self.driver.close()
-
-# time.sleep(1)
-
-# keys = [Keys.LEFT, Keys.RIGHT, Keys.DOWN, Keys.UP]
-# keys = []
-# keys += 1*[Keys.LEFT]
-# keys += 1*[Keys.RIGHT]
-# keys += 1*[Keys.DOWN]
-# keys += 1*[Keys.UP]
-
-# scores = []
-# while True:
-    # sendkey(random.choice(keys))
-
-    # # printgrid()
-
-    # if isdead():
-        # scores.append(score())
-        # print(max(scores))
-        # restart()
-
-# time.sleep(3)
