@@ -8,8 +8,10 @@ from selenium.webdriver.common.keys import Keys
 import time
 import random
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')
+
+# import matplotlib
+# matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 
 
@@ -17,7 +19,8 @@ class PoorMansGymEnv(object):
     class ActionSpace(object):
         def __init__(self):
             self.directions = [Keys.LEFT, Keys.RIGHT, Keys.DOWN, Keys.UP]
-            self.actions = [Keys.LEFT, Keys.RIGHT, Keys.DOWN]#, Keys.UP]
+            # self.actions = [Keys.LEFT, Keys.RIGHT, Keys.DOWN]#, Keys.UP]
+            self.actions = [Keys.LEFT, Keys.RIGHT, Keys.DOWN, Keys.UP]
             self.n = len(self.actions)
 
     def __init__(self, mocked_game=False, stop_on_invalid_move=False, average_over=50, max_invalid_moves=5, square_grid=False):
@@ -41,7 +44,7 @@ class PoorMansGymEnv(object):
 
         self.average_over = average_over
         self.fig, self.ax = plt.subplots()
-        self.line, = self.ax.plot([], [], lw=2, label='1 game')
+        self.line, = self.ax.plot([], [], 'x', lw=1, label='1 game')
         self.avgline, = self.ax.plot(
             [], [], lw=2, label='{} game average'.format(self.average_over))
         self.ax.set_xlabel('games')
@@ -78,6 +81,7 @@ class PoorMansGymEnv(object):
             self.lastgrid[np.random.randint(0, len(self.lastgrid))] = 2
         self.lastscore = 0
         self.nr_of_invalid_moves = 0
+        self.steps = 0
 
         # replace_function = """
         # ThreesGame.prototype.plantFood = function(t) {
@@ -119,6 +123,9 @@ class PoorMansGymEnv(object):
         else:
             done = True
             tmpgrid = np.array(self.lastgrid).reshape(-1, 4)
+            if (np.array(self.lastgrid) == 0).any():
+                return False
+
             for i in range(4):
                 for j in range(4):
                     if i+1 < 4 and self.canjoin(tmpgrid, (i,j), (i+1,j)):
@@ -141,6 +148,7 @@ class PoorMansGymEnv(object):
         pass
 
     def step(self, key):
+        self.steps+= 1
         if not self.mocked_game:
             self.driver.find_element_by_xpath('//body').send_keys(
                 self.action_space.actions[key])
@@ -172,7 +180,7 @@ class PoorMansGymEnv(object):
 
         observation = np.log(observation + 1)
         # observation = observation / np.max(observation)
-        return (observation, reward, done, {})
+        return (observation, reward, done, {'score': self.lastscore, 'game_steps': self.steps})
 
     def canjoin(self, grid, a, b):
         return grid[a] < 3 and grid[b] < 3 and grid[a] != grid[b] or grid[a] > 2 and grid[a] == grid[b]

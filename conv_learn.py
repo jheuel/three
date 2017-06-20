@@ -47,6 +47,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--mode', choices=['train', 'test'], default='train')
 parser.add_argument('--env-name', type=str, default='BreakoutDeterministic-v3')
 parser.add_argument('--weights', type=str, default=None)
+parser.add_argument('-l', '--load_weights', default=None)
 args = parser.parse_args()
 
 # Get the environment and extract the number of actions.
@@ -64,13 +65,13 @@ model.add(Convolution2D(256, (2,1), strides=1, padding='same'))#, input_shape=in
 model.add(Activation('relu'))
 model.add(Convolution2D(256, (1,2), strides=1, padding='same'))#, input_shape=input_shape))
 model.add(Activation('relu'))
-model.add(Convolution2D(256, (2,1), strides=1, padding='same'))#, input_shape=input_shape))
+model.add(Convolution2D(512, (2,1), strides=1, padding='same'))#, input_shape=input_shape))
 model.add(Activation('relu'))
-model.add(Convolution2D(256, (1,2), strides=1, padding='same'))#, input_shape=input_shape))
+model.add(Convolution2D(512, (1,2), strides=1, padding='same'))#, input_shape=input_shape))
 model.add(Activation('relu'))
-model.add(Convolution2D(256, (2,1), strides=1, padding='same'))#, input_shape=input_shape))
+model.add(Convolution2D(512, (2,1), strides=1, padding='same'))#, input_shape=input_shape))
 model.add(Activation('relu'))
-model.add(Convolution2D(256, (1,2), strides=1, padding='same'))#, input_shape=input_shape))
+model.add(Convolution2D(512, (1,2), strides=1, padding='same'))#, input_shape=input_shape))
 model.add(Activation('relu'))
 # model.add(Dropout(0.1))
 # model.add(MaxPooling2D(pool_size=2))#, strides=1, padding='same'))
@@ -81,7 +82,7 @@ model.add(Activation('relu'))
 # model.add(Dropout(0.1))
 # model.add(MaxPooling2D(pool_size=1, padding='same'))
 model.add(Flatten())
-model.add(Dense(64))
+model.add(Dense(128))
 model.add(Activation('relu'))
 # model.add(Dropout(0.1))
 # model.add(Dense(100))
@@ -93,7 +94,7 @@ print(model.summary())
 
 # Finally, we configure and compile our agent. You can use every built-in Keras optimizer and
 # even the metrics!
-memory = SequentialMemory(limit=5000000, window_length=WINDOW_LENGTH)
+memory = SequentialMemory(limit=int(5e6), window_length=WINDOW_LENGTH)
 # processor = AtariProcessor()
 
 # Select a policy. We use eps-greedy action selection, which means that a random action is selected
@@ -107,7 +108,7 @@ policy = LinearAnnealedPolicy(
     value_max=1.,
     value_min=.1,
     value_test=.05,
-    nb_steps=1000000)
+    nb_steps=1e6)
 
 # The trade-off between exploration and exploitation is difficult and an on-going research topic.
 # If you want, you can experiment with the parameters or use a different policy. Another popular one
@@ -115,19 +116,38 @@ policy = LinearAnnealedPolicy(
 # policy = BoltzmannQPolicy()
 # Feel free to give it a try!
 
+warmup_steps = 100000
+if args.load_weights:
+    warmup_steps = 0
+    # policy = LinearAnnealedPolicy(
+        # EpsGreedyQPolicy(),
+        # attr='eps',
+        # value_max=1.00,
+        # value_min=0.01,
+        # value_test=.05,
+        # nb_steps=1e6)
+
+
 dqn = DQNAgent(
     model=model,
     nb_actions=nb_actions,
     policy=policy,
     memory=memory,
     # processor=processor,
-    nb_steps_warmup=100000,
+    nb_steps_warmup=warmup_steps,
     gamma=.9,
-    target_model_update=3000,
+    target_model_update=1e-3,
+    # target_model_update=3000,
     # train_interval=4,
-    # delta_clip=1
+    delta_clip=1
 )
 dqn.compile(Adam(lr=1e-3), metrics=['mae'])
+
+if args.load_weights:
+    weights_filename = args.load_weights
+    if args.weights:
+        weights_filename = args.weights
+    dqn.load_weights(weights_filename)
 
 if args.mode == 'train':
     # Okay, now it's time to learn something! We capture the interrupt exception so that training
@@ -139,18 +159,11 @@ if args.mode == 'train':
         ModelIntervalCheckpoint(checkpoint_weights_filename, interval=25000)
     ]
     callbacks += [FileLogger(log_filename, interval=100)]
-    dqn.fit(env, callbacks=callbacks, nb_steps=175000000, log_interval=10000, verbose=2)
+    dqn.fit(env, callbacks=callbacks, nb_steps=175e6, log_interval=10000, verbose=1)
 
     # After training is done, we save the final weights one more time.
     dqn.save_weights(weights_filename, overwrite=True)
 
-    # Finally, evaluate our algorithm for 10 episodes.
-    env = PoorMansGymEnv(square_grid=True)
-    dqn.test(env, nb_episodes=10, visualize=False)
 elif args.mode == 'test':
-    weights_filename = 'dqn_{}_weights.h5f'.format(args.env_name)
-    if args.weights:
-        weights_filename = args.weights
-    dqn.load_weights(weights_filename)
     env = PoorMansGymEnv(square_grid=True)
     dqn.test(env, nb_episodes=10, visualize=False)
