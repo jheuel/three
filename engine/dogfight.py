@@ -13,6 +13,7 @@ import numpy as np
 from PIL import Image, ImageChops
 from io import BytesIO
 import base64
+import os
 
 # import matplotlib
 # matplotlib.use('Agg')
@@ -23,19 +24,16 @@ class PoorMansGymEnv(object):
     class ActionSpace(object):
         def __init__(self):
             self.actions = [Keys.DOWN, Keys.UP, Keys.LEFT]
+            self.blocking_moves = [Keys.DOWN, Keys.UP]
             self.n = len(self.actions)
 
-    def __init__(self, average_over=20):
+    def __init__(self, average_over=40):
+        self.im_size = (64, 64)
         self.action_space = self.ActionSpace()
-        # self.driver = webdriver.Chrome()
-        self.driver = webdriver.Firefox()
         self.url = 'https://www.gameeapp.com/game/0fmMKCljn~telegram:inline~759394035287578674~3761925~Johannes~AgAAAD5FAAAbtCgRddGKewLJ2RQ#tgShareScoreUrl=tg%3A%2F%2Fshare_game_score%3Fhash%3DgCUIA3WqOjLIrVP2y1tHh1eLxXuG3Rbl470r7JzXQn8'
-        self.driver.get(self.url)
-        self.driver.set_window_position(0, 0)
-        self.driver.set_window_size(700, 800)
-        time.sleep(3.0)
-        self.click_overlay()
+        self.driver = None
 
+        self.last_score = 0
         self.scores = []
         self.average_over = average_over
         self.fig, self.ax = plt.subplots()
@@ -47,6 +45,43 @@ class PoorMansGymEnv(object):
         self.ax.legend(loc='best', ncol=2)
         self.lasttile = 1
         plt.show(block=False)
+
+    def reset(self):
+        print(' score: {}'.format(self.last_score))
+        if not self.driver is None and len(self.scores) % 100 == 0:
+            self.driver.quit()
+            os.system('pkill firefox')
+            self.driver = None
+
+        if self.driver is None:
+            # self.driver = webdriver.Chrome()
+            self.driver = webdriver.Firefox()
+            self.driver.get(self.url)
+            self.driver.set_window_position(0, 0)
+            self.driver.set_window_size(700, 800)
+            time.sleep(3.0)
+            self.click_overlay()
+
+        # self.driver.switch_to_default_content()
+        # self.driver.switch_to_frame(self.driver.find_element_by_name("game"))
+        self.scores.append(self.score())
+        self.replot()
+        time.sleep(3)
+
+        self.driver.switch_to_default_content()
+        actions = ActionChains(self.driver)
+        actions.key_down('r')
+        actions.perform()
+        time.sleep(0.5)
+        actions.key_up('r')
+        actions.perform()
+
+        self.click_overlay()
+
+        self.last_score = 0
+        self.last_health = self.health()
+
+        return self.obs()
 
     def replot(self):
         self.line.set_data(range(len(self.scores)), self.scores)
@@ -92,27 +127,6 @@ class PoorMansGymEnv(object):
     def sample(self):
         return random.randint(0, self.action_space.n-1)
 
-    def reset(self):
-        self.scores.append(self.score())
-        print('reset')
-        self.replot()
-        time.sleep(3)
-
-        self.driver.switch_to_default_content()
-        actions = ActionChains(self.driver)
-        actions.key_down('r')
-        actions.perform()
-        time.sleep(0.5)
-        actions.key_up('r')
-        actions.perform()
-        
-        self.click_overlay()
-
-        self.last_score = 0
-        self.last_health = self.health()
-
-        return self.obs()
-
     def keypress(self, k):
         # https://stackoverflow.com/a/44543367 could help with chrome
 
@@ -123,8 +137,12 @@ class PoorMansGymEnv(object):
         actions.key_up(k)
         actions.perform()
 
+        # if k in self.action_space.blocking_moves:
+            # time.sleep(0.5)
+
     def score(self):
-        return int(self.driver.find_element_by_class_name('child-score').text)
+        s = int(self.driver.find_element_by_class_name('child-score').text)
+        return s
 
     def health(self):
         self.driver.switch_to_frame(self.driver.find_element_by_name("game"))
@@ -148,19 +166,15 @@ class PoorMansGymEnv(object):
         diff = ImageChops.difference(im, bg)
         diff = ImageChops.add(diff, diff, 2.0, -100)
         bbox = diff.getbbox()
-        # print(bbox)
         im = im.crop(bbox)
-        im.thumbnail((128, 128), Image.ANTIALIAS)
+        im.thumbnail(self.im_size, Image.ANTIALIAS)
         # im.save('test.png')
-        # print(im.size)
         # im.show()
         self.driver.switch_to_default_content()
         return im
 
     def step(self, key):
         self.keypress(self.action_space.actions[key])
-        # self.driver.save_screenshot('test.png')
-        # points = [rect['x'], rect['y'], rect['x'] + rect['width'], rect['y'] + rect['height']]
 
         self.driver.find_element_by_xpath('//body').send_keys(
             self.action_space.actions[key])
@@ -169,7 +183,8 @@ class PoorMansGymEnv(object):
 
         new_score = self.score()
         new_health = self.health()
-        reward = new_score - self.last_score - (self.last_health - new_health)/25
+        reward = new_score - self.last_score# - (self.last_health - new_health)
+        # reward = 0.025 + new_score - self.last_score - (self.last_health - new_health)
         self.last_score = new_score
         self.last_health = new_health
 
@@ -178,4 +193,4 @@ class PoorMansGymEnv(object):
         return (observation, reward, done, {'score': self.score()})
 
     def __del__(self):
-        self.driver.close()
+        self.driver.quit()
