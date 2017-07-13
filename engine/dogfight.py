@@ -28,7 +28,7 @@ class PoorMansGymEnv(object):
             self.n = len(self.actions)
 
     def __init__(self, average_over=40):
-        self.im_size = (64, 64)
+        self.im_size = (100, 100)
         self.action_space = self.ActionSpace()
         self.url = 'https://www.gameeapp.com/game/0fmMKCljn~telegram:inline~759394035287578674~3761925~Johannes~AgAAAD5FAAAbtCgRddGKewLJ2RQ#tgShareScoreUrl=tg%3A%2F%2Fshare_game_score%3Fhash%3DgCUIA3WqOjLIrVP2y1tHh1eLxXuG3Rbl470r7JzXQn8'
         self.driver = None
