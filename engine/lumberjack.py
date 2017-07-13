@@ -28,7 +28,8 @@ class PoorMansGymEnv(object):
         self.action_space = self.ActionSpace()
         # self.driver = webdriver.Chrome()
         self.driver = webdriver.Firefox()
-        self.url = 'https://tbot.xyz/lumber/#eyJ1IjoyODc4ODAyMTksIm4iOiJuaWtsYXMgbm9sdGUiLCJnIjoiTHVtYmVySmFjayIsImNpIjoiMjI3OTUwMjExODA1NzEwNzg5MiIsImkiOiJBZ0FBQUZoSUFBQWJ0Q2dSalJUX3hIVDFtaDAifTQ0ODFkYmFlNzM0ZTUwNWViZTdhYzY4YzhiY2IzZDBh'
+        # self.url = 'https://tbot.xyz/lumber/#eyJ1IjoyODc4ODAyMTksIm4iOiJuaWtsYXMgbm9sdGUiLCJnIjoiTHVtYmVySmFjayIsImNpIjoiMjI3OTUwMjExODA1NzEwNzg5MiIsImkiOiJBZ0FBQUZoSUFBQWJ0Q2dSalJUX3hIVDFtaDAifTQ0ODFkYmFlNzM0ZTUwNWViZTdhYzY4YzhiY2IzZDBh'
+        self.url = 'https://tbot.xyz/lumber/#eyJ1IjozNzYxOTI1LCJuIjoiSm9oYW5uZXMgSGV1ZWwiLCJnIjoiTHVtYmVySmFjayIsImNpIjoiMjI3OTUwMjExODA1NzEwNzg5MiIsImkiOiJBZ0FBQUZoSUFBQWJ0Q2dSalJUX3hIVDFtaDAifTU2ZmM5OWFhZDkzMDZjZTE5ZTRhNmJkNzJmZmUxODcx?tgShareScoreUrl=tg%3A%2F%2Fshare_game_score%3Fhash%3Do-BN6mPgKwSCkj39r4rr4RjOPGmNdMf7TQaG1HQm4ks'
         self.driver.get(self.url)
         self.driver.set_window_position(0, 0)
         self.driver.set_window_size(700, 800)
@@ -144,7 +145,7 @@ class PoorMansGymEnv(object):
         bbox = diff.getbbox()
         # print(bbox)
         im = im.crop(bbox)
-        im.thumbnail((64,64), Image.ANTIALIAS)
+        im.thumbnail((84,84), Image.ANTIALIAS)
         # im.save('test.png')
         # print(im.size)
         #im.show()
@@ -159,10 +160,10 @@ class PoorMansGymEnv(object):
 
 #        self.driver.find_element_by_xpath('//body').send_keys(
 #            self.action_space.actions[key])
-        time.sleep(.05)
+        # time.sleep(.05)
         im = self.obs()
         self.new_score = self.score()
-        reward = 0 if self.done() else 1 #self.new_score - self.last_score
+        reward = -1 if self.done() else 1 #self.new_score - self.last_score
         self.last_score = self.new_score
         done = self.done()
         observation = im

@@ -17,19 +17,20 @@ from rl.core import Processor
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 from engine.lumberjack import PoorMansGymEnv
 
-
-INPUT_SHAPE = (64,64)
-WINDOW_LENGTH = 20
+INPUT_SHAPE = (84, 84)
+WINDOW_LENGTH = 1
 
 
 class AtariProcessor(Processor):
     def process_observation(self, observation):
         # assert observation.ndim == 3  # (height, width, channel)
         img = observation
-        img = img.resize(INPUT_SHAPE).convert('L')  # resize and convert to grayscale
+        img = img.resize(INPUT_SHAPE).convert(
+            'L')  # resize and convert to grayscale
         processed_observation = np.array(img)
         assert processed_observation.shape == INPUT_SHAPE
-        return processed_observation.astype('uint8')  # saves storage in experience memory
+        return processed_observation.astype(
+            'uint8')  # saves storage in experience memory
 
     def process_state_batch(self, batch):
         # We could perform this processing step in `process_observation`. In this case, however,
@@ -40,6 +41,7 @@ class AtariProcessor(Processor):
 
     def process_reward(self, reward):
         return np.clip(reward, -1., 1.)
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--mode', choices=['train', 'test'], default='train')
@@ -55,7 +57,7 @@ env = PoorMansGymEnv()
 nb_actions = env.action_space.n
 
 # Next, we build our model. We use the same model that was described by Mnih et al. (2015).
-input_shape = (WINDOW_LENGTH,) + INPUT_SHAPE
+input_shape = (WINDOW_LENGTH, ) + INPUT_SHAPE
 model = Sequential()
 if K.image_dim_ordering() == 'tf':
     # (width, height, channels)
@@ -65,14 +67,14 @@ elif K.image_dim_ordering() == 'th':
     model.add(Permute((1, 2, 3), input_shape=input_shape))
 else:
     raise RuntimeError('Unknown image_dim_ordering.')
-model.add(Convolution2D(32, 8, 8, subsample=(4, 4)))
+model.add(Convolution2D(16, 8, 8, subsample=(4, 4)))
 model.add(Activation('relu'))
 model.add(Convolution2D(32, 4, 4, subsample=(2, 2)))
 model.add(Activation('relu'))
 model.add(Convolution2D(32, 3, 3, subsample=(1, 1)))
 model.add(Activation('relu'))
 model.add(Flatten())
-model.add(Dense(128))
+model.add(Dense(256))
 model.add(Activation('relu'))
 model.add(Dense(nb_actions))
 model.add(Activation('linear'))
@@ -88,8 +90,16 @@ processor = AtariProcessor()
 # the agent initially explores the environment (high eps) and then gradually sticks to what it knows
 # (low eps). We also set a dedicated eps value that is used during testing. Note that we set it to 0.05
 # so that the agent still performs some random actions. This ensures that the agent cannot get stuck.
-policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
-                              nb_steps=1000)
+nb_steps = 1000
+if args.weights:
+    nb_steps = 1
+policy = LinearAnnealedPolicy(
+    EpsGreedyQPolicy(),
+    attr='eps',
+    value_max=.5,
+    value_min=0,
+    value_test=0,
+    nb_steps=nb_steps)
 
 # The trade-off between exploration and exploitation is difficult and an on-going research topic.
 # If you want, you can experiment with the parameters or use a different policy. Another popular one
@@ -101,10 +111,17 @@ nb_steps_warmup = 100
 if args.weights:
     nb_steps_warmup = 100
 
-dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory,
-               processor=processor, nb_steps_warmup=nb_steps_warmup, gamma=1, target_model_update=10,
-               train_interval=1)
-dqn.compile(Adam(lr=.00025), metrics=['mae'])
+dqn = DQNAgent(
+    model=model,
+    nb_actions=nb_actions,
+    policy=policy,
+    memory=memory,
+    processor=processor,
+    nb_steps_warmup=nb_steps_warmup,
+    gamma=1,
+    target_model_update=100,
+    train_interval=1)
+dqn.compile(Adam(lr=.001), metrics=['mae'])
 
 if args.weights:
     weights_filename = args.weights
@@ -116,15 +133,23 @@ if args.mode == 'train':
     weights_filename = 'dqn_{}_weights.h5f'.format(env_name)
     checkpoint_weights_filename = 'dqn_lumberjack_' + env_name + '_weights_{step}.h5f'
     log_filename = 'dqn_lumberjack_{}_log.json'.format(env_name)
-    callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=250000)]
+    callbacks = [
+        ModelIntervalCheckpoint(checkpoint_weights_filename, interval=1000)
+    ]
     callbacks += [FileLogger(log_filename, interval=100)]
-    dqn.fit(env, callbacks=callbacks, nb_steps=17500000, log_interval=10000, verbose=1)
+    dqn.fit(
+        env,
+        callbacks=callbacks,
+        nb_steps=17500000,
+        log_interval=10000,
+        verbose=1)
 
     # After training is done, we save the final weights one more time.
     dqn.save_weights(weights_filename, overwrite=True)
 
     # Finally, evaluate our algorithm for 10 episodes.
     dqn.test(env, nb_episodes=10, visualize=False)
+
 elif args.mode == 'test':
     weights_filename = 'dqn_lumberjack_{}_weights.h5f'.format(env_name)
     if args.weights:
